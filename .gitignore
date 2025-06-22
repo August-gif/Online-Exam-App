@@ -1,0 +1,89 @@
+# ----------------------------------------------------
+# General ignores (Systèmes d'exploitation, logs, etc.)
+# ----------------------------------------------------
+.DS_Store             # Fichiers macOS (macOS)
+Thumbs.db             # Fichiers de vignettes Windows (Windows)
+*.log                 # Fichiers de logs (général)
+logs/                 # Dossier de logs
+tmp/                  # Dossiers temporaires
+
+# ----------------------------------------------------
+# Java et Fichiers de Compilation
+# ----------------------------------------------------
+*.class               # Fichiers compilés Java
+*.jar                 # Fichiers Jar générés
+*.war                 # Fichiers War générés
+*.ear                 # Fichiers Ear générés
+*.zip                 # Archives (si générées par le build)
+*.tar.gz              # Archives (si générées par le build)
+*.rar                 # Archives (si générées par le build)
+*.exe                 # Exécutables (si générés)
+*.dll                 # Bibliothèques dynamiques (si générées)
+*.so                  # Bibliothèques partagées (si générées)
+
+# ----------------------------------------------------
+# Maven Specific
+# ----------------------------------------------------
+target/                               # Dossier de build Maven
+# Exclure le wrapper Maven (si tu l'as, il est utile pour la portabilité du build)
+# !.mvn/wrapper/maven-wrapper.jar    # Déjà présent, si tu veux le garder
+
+# ----------------------------------------------------
+# IDE Specific (Ajouts et ajustements)
+# ----------------------------------------------------
+
+### Eclipse / STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache
+HELP.md               # Si HELP.md est un fichier généré par STS et non ton propre README
+
+### IntelliJ IDEA ###
+.idea/                # Dossier de configuration IntelliJ
+*.iml                 # Fichiers de modules IntelliJ
+*.ipr                 # Fichiers de projet IntelliJ
+*.iws                 # Fichiers de workspace IntelliJ
+out/                  # Dossier de sortie des compilations IntelliJ
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/dist_lib/            # Ajout potentiel pour NetBeans
+/nbdist/
+/.nb-gradle/
+build/                # Dossier de build NetBeans (si non déjà couvert par Maven/Gradle)
+!**/src/main/**/build/ # Exclure les builds des sources principales (si build est dans src)
+!**/src/test/**/build/ # Exclure les builds des sources de test (si build est dans src)
+
+### VS Code ###
+.vscode/              # Dossier de configuration VS Code
+
+# ----------------------------------------------------
+# Spring Boot Specific
+# ----------------------------------------------------
+.mvn/wrapper/maven-wrapper.jar # Ignorer le jar du wrapper Maven (il est souvent déjà dans gitignore global)
+
+# Fichiers de propriétés/YAML spécifiques à l'environnement ou sensibles
+# NE PAS COMMITER LES SECRETS !
+# Laissez ces lignes commentées ou ajoutez vos propres noms de fichiers sensibles.
+# Exemple : si vous avez un fichier application-prod.properties avec des identifiants de base de données.
+# /src/main/resources/application-prod.properties
+# /src/main/resources/application-dev.properties
+# /src/main/resources/application-secrets.yml
+
+# ----------------------------------------------------
+# Fichiers Uploadés par l'Application
+# ----------------------------------------------------
+# C'est CRUCIAL ! Les fichiers uploadés par les utilisateurs (images, PDF, etc.)
+# NE DOIVENT PAS être versionnés dans Git.
+# Si ton répertoire d'upload est par exemple '/opt/online-exam-data/uploads' (hors du projet)
+# tu n'as pas besoin de l'ignorer ici.
+# Mais si tu as configuré ton `LocalFileStorageServiceImp` pour stocker les fichiers
+# DANS un sous-dossier de ton projet (par exemple, "uploads" à la racine de ton projet),
+# ALORS tu dois l'ignorer :
+/uploads/

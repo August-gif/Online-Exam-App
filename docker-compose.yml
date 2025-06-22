@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  online-exam-app:
+    image: online-exam-app-server # Vous devrez construire cette image Docker
+    container_name: online-exam-app-server
+    ports:
+      - "9192:9192"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/online_exam_db?serverTimezone=Africa/Kinshasa
+      - SPRING_DATASOURCE_USERNAME=exam_user
+      - SPRING_DATASOURCE_PASSWORD=exam_password
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+    depends_on:
+      - mysql
+    networks:
+      - exam-network
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql-db
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=root_password # Mot de passe root pour MySQL (à sécuriser en production)
+      - MYSQL_DATABASE=online_exam_db
+      - MYSQL_USER=exam_user
+      - MYSQL_PASSWORD=exam_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - exam-network
+
+networks:
+  exam-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
