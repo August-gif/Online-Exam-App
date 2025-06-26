@@ -1,22 +1,21 @@
-package com.BrainTech.Online_exam_App_server.service.impl;
+package com.BrainTech.Online_exam_App_server.service.implementation;
 
-import com.BrainTech.Online_exam_App_server.exceptions.ResourceNotFoundException;
 import com.BrainTech.Online_exam_App_server.exceptions.InvalidOperationException;
-import com.BrainTech.Online_exam_App_server.model.Exam;
-import com.BrainTech.Online_exam_App_server.model.ReponseEtudiant;
-import com.BrainTech.Online_exam_App_server.model.ReponseQuestionEtudiant;
-import com.BrainTech.Online_exam_App_server.model.Student;
+import com.BrainTech.Online_exam_App_server.exceptions.ResourceNotFoundException;
+import com.BrainTech.Online_exam_App_server.model.Student; // Utilise "Student"
+import com.BrainTech.Online_exam_App_server.model.Option;
 import com.BrainTech.Online_exam_App_server.model.Question;
 import com.BrainTech.Online_exam_App_server.model.QuestionChoixMultiple;
-import com.BrainTech.Online_exam_App_server.model.QuestionMixte;
-import com.BrainTech.Online_exam_App_server.model.Option;
-import com.BrainTech.Online_exam_App_server.repository.ExamRepository;
+import com.BrainTech.Online_exam_App_server.model.QuestionMixte; // Pour le cas de la question mixte
+import com.BrainTech.Online_exam_App_server.model.ReponseEtudiant;
+import com.BrainTech.Online_exam_App_server.repository.StudentRepository; // Utilise "StudentRepository"
+import com.BrainTech.Online_exam_App_server.repository.OptionRepository;
 import com.BrainTech.Online_exam_App_server.repository.QuestionRepository;
 import com.BrainTech.Online_exam_App_server.repository.ReponseEtudiantRepository;
-import com.BrainTech.Online_exam_App_server.repository.ReponseQuestionEtudiantRepository;
-import com.BrainTech.Online_exam_App_server.repository.StudentRepository;
 import com.BrainTech.Online_exam_App_server.service.ReponseEtudiantService;
+import com.BrainTech.Online_exam_App_server.enums.QuestionType;
 import lombok.RequiredArgsConstructor;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,7 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors; // Pour Java 8+
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -32,295 +32,361 @@ import java.util.stream.Collectors; // Pour Java 8+
 public class ReponseEtudiantServiceImpl implements ReponseEtudiantService {
 
     private final ReponseEtudiantRepository reponseEtudiantRepository;
-    private final StudentRepository studentRepository;
-    private final ExamRepository examRepository;
+    private final StudentRepository studentRepository; // Injection de StudentRepository
     private final QuestionRepository questionRepository;
-    private final ReponseQuestionEtudiantRepository reponseQuestionEtudiantRepository;
+    private final OptionRepository optionRepository;
 
     /**
-     * Soumet la réponse complète d'un étudiant pour un examen.
-     * Cette méthode valide si l'examen est ouvert, empêche les soumissions multiples
-     * et calcule un score initial basé sur les réponses automatiques.
-     *
-     * @param studentId L'ID de l'étudiant.
-     * @param examId L'ID de l'examen concerné.
-     * @param reponsesAuxQuestions La liste des réponses individuelles à chaque question de l'examen.
-     * @return L'objet ReponseEtudiant persistant après la soumission.
-     * @throws ResourceNotFoundException si l'étudiant ou l'examen n'est pas trouvé.
-     * @throws InvalidOperationException si la soumission est hors délai ou déjà effectuée.
+     * Enregistre la réponse d'un étudiant à une question.
+     * Valide l'étudiant et la question, et s'assure que le type de réponse correspond au type de question.
+     * @param reponseEtudiant L'objet ReponseEtudiant à sauvegarder.
+     * @return La ReponseEtudiant persistante.
+     * @throws ResourceNotFoundException si l'étudiant ou la question n'est pas trouvée.
+     * @throws InvalidOperationException si la réponse ne correspond pas au type de question.
      */
     @Override
-    @Transactional // Assure que toutes les opérations de cette méthode sont atomiques
-    public ReponseEtudiant soumettreReponseExamen(Long studentId, Long examId, List<ReponseQuestionEtudiant> reponsesAuxQuestions) {
-        log.info("Tentative de soumission de la réponse d'examen pour l'étudiant ID: {} et l'examen ID: {}", studentId, examId);
+    @Transactional
+    public ReponseEtudiant saveReponse(ReponseEtudiant reponseEtudiant) {
+        log.info("Tentative d'enregistrement de la réponse pour l'étudiant ID {} et la question ID {}.",
+                reponseEtudiant.getStudent().getId(), reponseEtudiant.getQuestion().getId());
 
-        // 1. Vérifier l'existence de l'étudiant et de l'examen
-        Student student = studentRepository.findById(studentId)
+        // 1. Valider l'existence de l'étudiant
+        Student student = studentRepository.findById(reponseEtudiant.getStudent().getId())
                 .orElseThrow(() -> {
-                    log.error("Étudiant avec l'ID {} non trouvé.", studentId);
-                    return new ResourceNotFoundException("Étudiant non trouvé avec l'ID: " + studentId);
+                    log.error("Étudiant avec l'ID {} non trouvé.", reponseEtudiant.getStudent().getId());
+                    return new ResourceNotFoundException("Étudiant non trouvé avec l'ID: " + reponseEtudiant.getStudent().getId());
                 });
-        Exam exam = examRepository.findById(examId)
+        reponseEtudiant.setStudent(student);
+
+        // 2. Valider l'existence de la question et son type
+        Question question = questionRepository.findById(reponseEtudiant.getQuestion().getId())
                 .orElseThrow(() -> {
-                    log.error("Examen avec l'ID {} non trouvé.", examId);
-                    return new ResourceNotFoundException("Examen non trouvé avec l'ID: " + examId);
+                    log.error("Question avec l'ID {} non trouvée.", reponseEtudiant.getQuestion().getId());
+                    return new ResourceNotFoundException("Question non trouvée avec l'ID: " + reponseEtudiant.getQuestion().getId());
                 });
+        reponseEtudiant.setQuestion(question);
 
-        // 2. Vérifier si l'examen est encore ouvert
-        LocalDateTime now = LocalDateTime.now();
-        if (now.isBefore(exam.getDateOuverture()) || now.isAfter(exam.getDateFermeture())) {
-            log.warn("Tentative de soumission de réponse pour l'examen ID {} en dehors des délais autorisés. Date d'ouverture: {}, Date de fermeture: {}",
-                    examId, exam.getDateOuverture(), exam.getDateFermeture());
-            throw new InvalidOperationException("L'examen n'est pas actuellement ouvert pour les soumissions.");
-        }
+        // 3. Valider et adapter la réponse en fonction du type de question
+        validateAndAdaptReponse(reponseEtudiant, question);
 
-        // 3. Vérifier si l'étudiant a déjà soumis une réponse pour cet examen
-        if (reponseEtudiantRepository.findByEtudiantIdAndExamenId(studentId, examId).isPresent()) {
-            log.warn("L'étudiant {} a déjà soumis une réponse pour l'examen {}. Les soumissions multiples ne sont pas autorisées.", studentId, examId);
-            throw new InvalidOperationException("L'étudiant a déjà soumis une réponse pour cet examen.");
-        }
+        reponseEtudiant.setDateReponse(LocalDateTime.now());
+        reponseEtudiant.setScoreObtenu(null); // Le score est calculé ultérieurement via corrigerReponse()
 
-        // 4. Créer l'entité ReponseEtudiant principale
-        ReponseEtudiant reponseEtudiant = new ReponseEtudiant();
-        reponseEtudiant.setEtudiant(student);
-        reponseEtudiant.setExamen(exam);
-        reponseEtudiant.setDateSoumission(now);
-        reponseEtudiant.setScoreTotal(0.0); // Le score sera calculé ci-dessous
-
-        // Enregistrer d'abord la ReponseEtudiant pour obtenir un ID si nécessaire pour les enfants
-        reponseEtudiant = reponseEtudiantRepository.save(reponseEtudiant);
-        log.debug("ReponseEtudiant créée avec l'ID: {}", reponseEtudiant.getId());
-
-        double totalScoreCalculated = 0.0;
-        // 5. Traiter chaque réponse de question individuelle
-        for (ReponseQuestionEtudiant reponseQuestion : reponsesAuxQuestions) {
-            if (reponseQuestion.getQuestion() == null || reponseQuestion.getQuestion().getId() == null) {
-                log.error("Réponse de question invalide: l'ID de la question est manquant.");
-                throw new InvalidOperationException("Chaque réponse de question doit être liée à une question existante.");
-            }
-            Question question = questionRepository.findById(reponseQuestion.getQuestion().getId())
-                    .orElseThrow(() -> {
-                        log.error("Question avec l'ID {} non trouvée pour la soumission de réponse.", reponseQuestion.getQuestion().getId());
-                        return new ResourceNotFoundException("Question non trouvée avec l'ID: " + reponseQuestion.getQuestion().getId());
-                    });
-
-            // Assurer que la question appartient bien à l'examen
-            if (!question.getExamen().getId().equals(exam.getId())) {
-                log.warn("La question {} n'appartient pas à l'examen {}. Tentative de soumission invalide.", question.getId(), examId);
-                throw new InvalidOperationException("La question " + question.getId() + " n'appartient pas à l'examen fourni.");
-            }
-
-            reponseQuestion.setQuestion(question);
-            reponseQuestion.setReponseEtudiant(reponseEtudiant);
-
-            // Calculer le score pour chaque question
-            double scoreQuestion = calculerScoreQuestion(reponseQuestion);
-            reponseQuestion.setScore(scoreQuestion);
-            totalScoreCalculated += scoreQuestion;
-
-            reponseQuestionEtudiantRepository.save(reponseQuestion); // Enregistrer chaque réponse de question
-            log.debug("ReponseQuestionEtudiant sauvegardée pour la question {}. Score: {}", question.getId(), scoreQuestion);
-        }
-
-        // 6. Mettre à jour le score total de la ReponseEtudiant
-        reponseEtudiant.setScoreTotal(totalScoreCalculated);
-        reponseEtudiant = reponseEtudiantRepository.save(reponseEtudiant); // Sauvegarder la ReponseEtudiant mise à jour
-
-        log.info("Réponse d'examen soumise avec succès pour l'étudiant ID: {} et l'examen ID: {}. Score total: {}", studentId, examId, totalScoreCalculated);
-        return reponseEtudiant;
+        ReponseEtudiant savedReponse = reponseEtudiantRepository.save(reponseEtudiant);
+        log.info("Réponse enregistrée avec succès avec l'ID: {}", savedReponse.getId());
+        return savedReponse;
     }
 
     /**
-     * Méthode privée pour calculer le score d'une question.
-     *
-     * @param reponseQuestion La ReponseQuestionEtudiant à évaluer.
-     * @return Le score calculé pour cette question.
-     */
-    private double calculerScoreQuestion(ReponseQuestionEtudiant reponseQuestion) {
-        Question question = reponseQuestion.getQuestion();
-        double pointsQuestion = (question.getPoints() != null) ? question.getPoints() : 0.0;
-
-        switch (question.getType()) {
-            case "CHOIX_MULTIPLE":
-                if (question instanceof QuestionChoixMultiple) {
-                    QuestionChoixMultiple qcm = (QuestionChoixMultiple) question;
-                    // Options correctes définies par le professeur
-                    List<Long> correctOptionIds = qcm.getOptions().stream()
-                            .filter(Option::isEstCorrecte)
-                            .map(Option::getId)
-                            .collect(Collectors.toList());
-
-                    // Options choisies par l'étudiant
-                    List<Long> studentChosenOptionIds = reponseQuestion.getOptionChoisies().stream()
-                            .map(Option::getId)
-                            .collect(Collectors.toList());
-
-                    // Vérifier si l'étudiant a coché EXACTEMENT les bonnes réponses et RIEN d'autre
-                    if (correctOptionIds.size() == studentChosenOptionIds.size() &&
-                            studentChosenOptionIds.containsAll(correctOptionIds)) {
-                        return pointsQuestion;
-                    }
-                }
-                return 0.0; // Si incorrect ou type non géré, ou si une seule mauvaise option cochée
-            case "CONVENTIONNELLE":
-                // Pour les questions conventionnelles, le scoring est manuel.
-                // Le score sera 0.0 au moment de la soumission. Il devra être mis à jour par un professeur.
-                return 0.0;
-            case "MIXTE":
-                if (question instanceof QuestionMixte) {
-                    QuestionMixte qm = (QuestionMixte) question;
-                    double scorePartiel = 0.0;
-
-                    // Scoring de la partie QCM de la question mixte
-                    List<Long> correctOptionIdsMixte = qm.getOptionsPartieChoixMultiple().stream()
-                            .filter(Option::isEstCorrecte)
-                            .map(Option::getId)
-                            .collect(Collectors.toList());
-
-                    List<Long> studentChosenOptionIdsMixte = reponseQuestion.getOptionMixteChoisie().stream()
-                            .map(Option::getId)
-                            .collect(Collectors.toList());
-
-                    if (correctOptionIdsMixte.size() == studentChosenOptionIdsMixte.size() &&
-                            studentChosenOptionIdsMixte.containsAll(correctOptionIdsMixte)) {
-                        // Exemple: attribuer une partie des points pour la partie QCM
-                        scorePartiel += pointsQuestion * 0.5; // Par exemple, 50% des points pour la partie QCM correcte
-                    }
-
-                    // La partie conventionnelle est notée manuellement, donc 0 pour l'auto-notation
-                    return scorePartiel;
-                }
-                return 0.0;
-            default:
-                log.warn("Type de question non géré pour le scoring automatique: {}", question.getType());
-                return 0.0;
-        }
-    }
-
-    /**
-     * Récupère une soumission d'examen spécifique par son ID.
-     *
-     * @param id L'ID de la ReponseEtudiant.
-     * @return Un Optional contenant la ReponseEtudiant si trouvée.
+     * Récupère une réponse d'étudiant par son ID.
      */
     @Override
     @Transactional(readOnly = true)
-    public Optional<ReponseEtudiant> getReponseEtudiantById(Long id) {
-        log.debug("Récupération de ReponseEtudiant avec l'ID: {}", id);
+    public Optional<ReponseEtudiant> getReponseById(Long id) {
+        log.debug("Récupération de la réponse avec l'ID: {}", id);
         return reponseEtudiantRepository.findById(id);
     }
 
     /**
-     * Récupère toutes les soumissions d'examens existantes dans le système.
-     *
-     * @return Une liste de toutes les ReponseEtudiant.
-     */
-    @Override
-    @Transactional(readOnly = true)
-    public List<ReponseEtudiant> getAllReponsesEtudiant() {
-        log.debug("Récupération de toutes les ReponsesEtudiant.");
-        return reponseEtudiantRepository.findAll();
-    }
-
-    /**
-     * Récupère toutes les soumissions d'examens effectuées par un étudiant spécifique.
-     *
-     * @param studentId L'ID de l'étudiant.
-     * @return Une liste des ReponseEtudiant de cet étudiant.
+     * Récupère toutes les réponses pour un étudiant donné.
      */
     @Override
     @Transactional(readOnly = true)
     public List<ReponseEtudiant> getReponsesByStudentId(Long studentId) {
-        log.debug("Récupération des ReponsesEtudiant pour l'étudiant ID: {}", studentId);
-        // Vérifier si l'étudiant existe avant de chercher ses réponses
+        log.debug("Récupération des réponses pour l'étudiant ID: {}", studentId);
         if (!studentRepository.existsById(studentId)) {
-            log.warn("Tentative de récupérer les réponses pour un étudiant inexistant avec l'ID: {}", studentId);
             throw new ResourceNotFoundException("Étudiant non trouvé avec l'ID: " + studentId);
         }
-        return reponseEtudiantRepository.findByEtudiantId(studentId);
+        return reponseEtudiantRepository.findByStudentId(studentId);
     }
 
     /**
-     * Récupère toutes les soumissions d'examens pour un examen donné.
-     *
-     * @param examId L'ID de l'examen.
-     * @return Une liste des ReponseEtudiant pour cet examen.
+     * Récupère toutes les réponses pour une question donnée.
      */
     @Override
     @Transactional(readOnly = true)
-    public List<ReponseEtudiant> getReponsesByExamId(Long examId) {
-        log.debug("Récupération des ReponsesEtudiant pour l'examen ID: {}", examId);
-        // Vérifier si l'examen existe avant de chercher ses réponses
-        if (!examRepository.existsById(examId)) {
-            log.warn("Tentative de récupérer les réponses pour un examen inexistant avec l'ID: {}", examId);
-            throw new ResourceNotFoundException("Examen non trouvé avec l'ID: " + examId);
+    public List<ReponseEtudiant> getReponsesByQuestionId(Long questionId) {
+        log.debug("Récupération des réponses pour la question ID: {}", questionId);
+        if (!questionRepository.existsById(questionId)) {
+            throw new ResourceNotFoundException("Question non trouvée avec l'ID: " + questionId);
         }
-        return reponseEtudiantRepository.findByExamenId(examId);
+        return reponseEtudiantRepository.findByQuestionId(questionId);
     }
 
     /**
-     * Récupère la soumission d'un étudiant pour un examen spécifique.
-     * Utile pour vérifier si un étudiant a déjà soumis un examen particulier.
-     *
-     * @param studentId L'ID de l'étudiant.
-     * @param examId    L'ID de l'examen.
-     * @return Un Optional contenant la ReponseEtudiant si trouvée.
+     * Récupère toutes les réponses d'un étudiant pour un examen donné.
      */
     @Override
     @Transactional(readOnly = true)
-    public Optional<List<ReponseEtudiant>> getReponseByStudentAndExam(Long studentId, Long examId) {
-        log.debug("Récupération de ReponseEtudiant pour l'étudiant ID: {} et l'examen ID: {}", studentId, examId);
-        // Vérifier l'existence de l'étudiant et de l'examen n'est pas strictement nécessaire pour un findBy multiple
-        // mais peut ajouter de la robustesse si la logique métier l'exige.
-        return reponseEtudiantRepository.findByEtudiantIdAndExamenId(studentId, examId);
+    public List<ReponseEtudiant> getReponsesByStudentAndExamen(Long studentId, Long examenId) {
+        log.debug("Récupération des réponses pour l'étudiant ID {} et l'examen ID {}.", studentId, examenId);
+        // La méthode du repository findByStudentIdAndQuestion_ExamenId gère la jointure.
+        return reponseEtudiantRepository.findByStudentIdAndQuestion_ExamenId(studentId, examenId);
     }
 
     /**
-     * Met à jour une soumission d'examen existante.
-     * Cela peut inclure la mise à jour du score total après correction manuelle.
-     *
-     * @param id L'ID de la ReponseEtudiant à mettre à jour.
-     * @param updatedReponseEtudiant L'objet ReponseEtudiant avec les données modifiées.
+     * Met à jour une réponse existante.
+     * Les champs Student et Question ne sont pas modifiables après la création.
+     * @param id L'ID de la réponse à mettre à jour.
+     * @param updatedReponse L'objet ReponseEtudiant avec les informations mises à jour.
      * @return La ReponseEtudiant mise à jour.
-     * @throws ResourceNotFoundException si la ReponseEtudiant n'est pas trouvée.
+     * @throws ResourceNotFoundException si la réponse n'est pas trouvée.
+     * @throws InvalidOperationException si le type de réponse est incompatible avec le type de question originale.
      */
     @Override
     @Transactional
-    public ReponseEtudiant updateReponseEtudiant(Long id, ReponseEtudiant updatedReponseEtudiant) {
-        log.info("Mise à jour de ReponseEtudiant avec l'ID: {}", id);
+    public ReponseEtudiant updateReponse(Long id, ReponseEtudiant updatedReponse) {
+        log.info("Tentative de mise à jour de la réponse avec l'ID: {}", id);
+
         ReponseEtudiant existingReponse = reponseEtudiantRepository.findById(id)
                 .orElseThrow(() -> {
-                    log.error("ReponseEtudiant avec l'ID {} non trouvée pour la mise à jour.", id);
-                    return new ResourceNotFoundException("ReponseEtudiant non trouvée avec l'ID: " + id);
+                    log.error("Réponse avec l'ID {} non trouvée pour la mise à jour.", id);
+                    return new ResourceNotFoundException("Réponse non trouvée avec l'ID: " + id);
                 });
 
-        // Mise à jour des champs pertinents. Les relations (étudiant, examen) ne devraient pas changer ici.
-        // Seuls les champs que l'on veut permettre de modifier sont copiés.
-        // Par exemple, le score total pourrait être mis à jour manuellement après la correction.
-        if (updatedReponseEtudiant.getScoreTotal() != null) {
-            existingReponse.setScoreTotal(updatedReponseEtudiant.getScoreTotal());
+        // Les champs student et question ne doivent pas être modifiables via update,
+        // car une réponse est liée à une question et un étudiant spécifiques.
+        // Si ces champs sont modifiés dans updatedReponse, ils seront ignorés ici.
+
+        // Récupérer la question associée pour valider la mise à jour
+        Question question = existingReponse.getQuestion();
+
+        // Valider et adapter la nouvelle réponse en fonction du type de question
+        validateAndAdaptReponse(updatedReponse, question);
+
+        // Mettre à jour les champs de réponse spécifiques
+        existingReponse.setReponseTextuelle(updatedReponse.getReponseTextuelle());
+
+        // Pour les ManyToMany (optionsSelectionnees), on gère le remplacement complet
+        existingReponse.getOptionsSelectionnees().clear();
+        if (updatedReponse.getOptionsSelectionnees() != null && !updatedReponse.getOptionsSelectionnees().isEmpty()) {
+            // Re-attacher les options existantes au contexte de persistance
+            Set<Option> managedOptions = updatedReponse.getOptionsSelectionnees().stream()
+                    .map(option -> optionRepository.findById(option.getId())
+                            .orElseThrow(() -> new ResourceNotFoundException("Option sélectionnée avec l'ID " + option.getId() + " non trouvée.")))
+                    .collect(Collectors.toSet());
+            existingReponse.getOptionsSelectionnees().addAll(managedOptions);
         }
-        // La date de soumission ne devrait normalement pas être modifiable.
-        // Si d'autres champs doivent être modifiables, ajoutez-les ici.
+
+        existingReponse.setDateReponse(LocalDateTime.now()); // Date de dernière modification
+        existingReponse.setScoreObtenu(null); // Le score est recalculé via corrigerReponse()
 
         ReponseEtudiant savedReponse = reponseEtudiantRepository.save(existingReponse);
-        log.info("ReponseEtudiant avec l'ID {} mise à jour avec succès.", id);
+        log.info("Réponse avec l'ID {} mise à jour avec succès.", id);
         return savedReponse;
     }
 
-    // Comme discuté précédemment, la méthode de suppression est commentée
-    // pour favoriser la rétention des données pour l'audit et la traçabilité.
-    // Si une "suppression" logique est nécessaire, on implémenterait un "soft delete"
-    // via un champ de statut ou un indicateur d'activité.
-    // @Override
-    // @Transactional
-    // public void deleteReponseEtudiant(Long id) {
-    //     log.info("Suppression de ReponseEtudiant avec l'ID: {}", id);
-    //     if (!reponseEtudiantRepository.existsById(id)) {
-    //         log.warn("ReponseEtudiant avec l'ID {} non trouvée pour la suppression.", id);
-    //         throw new ResourceNotFoundException("ReponseEtudiant non trouvée avec l'ID: " + id);
-    //     }
-    //     reponseEtudiantRepository.deleteById(id);
-    //     log.info("ReponseEtudiant avec l'ID {} supprimée avec succès.", id);
-    // }
+    /**
+     * Supprime une réponse par son ID.
+     */
+    @Override
+    @Transactional
+    public void deleteReponse(Long id) {
+        log.info("Tentative de suppression de la réponse avec l'ID: {}", id);
+        if (!reponseEtudiantRepository.existsById(id)) {
+            log.warn("Réponse avec l'ID {} non trouvée pour la suppression.", id);
+            throw new ResourceNotFoundException("Réponse non trouvée avec l'ID: " + id);
+        }
+        reponseEtudiantRepository.deleteById(id);
+        log.info("Réponse avec l'ID {} supprimée avec succès.", id);
+    }
+
+    /**
+     * Calcule et enregistre le score pour une réponse spécifique.
+     * Cette logique est adaptée aux différents types de questions.
+     * @param reponseId L'ID de la réponse à corriger.
+     * @return La ReponseEtudiant avec le score mis à jour.
+     * @throws ResourceNotFoundException si la réponse n'est pas trouvée.
+     * @throws InvalidOperationException si la logique de correction n'est pas implémentée pour ce type de question.
+     */
+    @Override
+    @Transactional
+    public ReponseEtudiant corrigerReponse(Long reponseId) {
+        log.info("Tentative de correction de la réponse avec l'ID: {}", reponseId);
+        ReponseEtudiant reponse = reponseEtudiantRepository.findById(reponseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Réponse non trouvée avec l'ID: " + reponseId));
+
+        Question question = reponse.getQuestion();
+        Double score = 0.0; // Initialisation du score
+
+        if (question.getType() == QuestionType.CHOIX_MULTIPLE) {
+            if (!(question instanceof QuestionChoixMultiple)) {
+                log.error("Erreur de type: Question ID {} est de type {} mais n'est pas une instance de QuestionChoixMultiple.", question.getId(), question.getType());
+                throw new InvalidOperationException("Incohérence de type de question pour la correction.");
+            }
+            QuestionChoixMultiple qcm = (QuestionChoixMultiple) question;
+
+            // Récupère les options *correctes* pour cette question
+            Set<Option> bonnesReponses = qcm.getOptions().stream()
+                    .filter(Option::isCorrect)
+                    .collect(Collectors.toSet());
+            // Récupère les options *sélectionnées par l'étudiant*
+            Set<Option> reponsesEtudiant = reponse.getOptionsSelectionnees();
+
+            // Logique de correction QCM : toutes les bonnes réponses sont sélectionnées, et aucune mauvaise
+            if (reponsesEtudiant.equals(bonnesReponses) && reponsesEtudiant.size() == bonnesReponses.size()) {
+                score = question.getPoints(); // Accorde tous les points
+            } else {
+                score = 0.0; // Ne donne aucun point si la sélection n'est pas parfaitement correcte
+                // Pour une logique plus avancée (points partiels, pénalités):
+                // long correctSelected = reponsesEtudiant.stream().filter(Option::isCorrect).count();
+                // long incorrectSelected = reponsesEtudiant.stream().filter(o -> !o.isCorrect()).count();
+                // score = (double) correctSelected / bonnesReponses.size() * question.getPoints();
+                // ou avec pénalités:
+                // score = (double) (correctSelected - incorrectSelected) / (bonnesReponses.size() + incorrectSelected).
+                // Il faudrait définir une pénalité par mauvaise réponse
+            }
+            log.debug("Correction QCM (Question ID {}): Bonnes réponses attendues: {}, Réponses étudiant: {}, Score calculé: {}", question.getId(), bonnesReponses.size(), reponsesEtudiant.size(), score);
+
+        } else if (question.getType() == QuestionType.CONVENTIONNELLE) {
+            // Les questions conventionnelles nécessitent une correction manuelle par un enseignant.
+            // On ne peut pas les corriger automatiquement sans une IA complexe de NLP.
+            log.warn("Correction manuelle requise pour la question conventionnelle ID {}. Score par défaut: 0.0", question.getId());
+            score = 0.0; // Le score initialisé, le professeur devra le définir manuellement.
+
+        } else if (question.getType() == QuestionType.MIXTE) {
+            if (!(question instanceof QuestionMixte)) {
+                log.error("Erreur de type: Question ID {} est de type {} mais n'est pas une instance de QuestionMixte.", question.getId(), question.getType());
+                throw new InvalidOperationException("Incohérence de type de question pour la correction.");
+            }
+            QuestionMixte qMixte = (QuestionMixte) question;
+
+            // --- Correction de la partie QCM de la question mixte ---
+            Set<Option> bonnesReponsesQCM = qMixte.getOptionsPartieChoixMultiple().stream()
+                    .filter(Option::isCorrect)
+                    .collect(Collectors.toSet());
+            Set<Option> reponsesEtudiantQCM = reponse.getOptionsSelectionnees();
+
+            if (reponsesEtudiantQCM.equals(bonnesReponsesQCM) && reponsesEtudiantQCM.size() == bonnesReponsesQCM.size()) {
+                // Si la partie QCM est correcte, attribue une fraction des points totaux (ex: 50%)
+                score = question.getPoints() * 0.5; // Exemple: 50% des points pour la partie QCM
+            } else {
+                score = 0.0; // Pas de points pour la partie QCM si incorrecte
+            }
+            log.debug("Correction MIXTE (Question ID {}): Score QCM calculé: {}", question.getId(), score);
+
+            // --- Partie textuelle de la question mixte ---
+            // La partie textuelle nécessite une correction manuelle, comme une conventionnelle.
+            log.warn("Correction manuelle requise pour la partie textuelle de la question MIXTE ID {}. Score actuel: {}", question.getId(), score);
+            // Le score final sera mis à jour manuellement par un enseignant.
+
+        } else {
+            log.error("Type de question non supporté pour la correction automatique: {}", question.getType());
+            throw new InvalidOperationException("Correction automatique non implémentée pour ce type de question: " + question.getType());
+        }
+
+        reponse.setScoreObtenu(score);
+        ReponseEtudiant updatedReponse = reponseEtudiantRepository.save(reponse);
+        log.info("Score de la réponse ID {} mis à jour à {}.", reponseId, score);
+        return updatedReponse;
+    }
+
+    @Override
+    @Transactional
+    public ReponseEtudiant noterManuellementReponse(Long reponseId, Double score) {
+        log.info("Tentative de notation manuelle pour la réponse ID {} avec le score {}.", reponseId, score);
+        ReponseEtudiant reponse = reponseEtudiantRepository.findById(reponseId)
+                .orElseThrow(() -> {
+                    log.error("Réponse avec l'ID {} non trouvée pour la notation manuelle.", reponseId);
+                    return new ResourceNotFoundException("Réponse non trouvée avec l'ID: " + reponseId);
+                });
+        Question question = reponse.getQuestion();
+
+        // Vérifier que la question est bien de type CONVENTIONNELLE ou MIXTE
+        if (question.getType() != QuestionType.CONVENTIONNELLE && question.getType() != QuestionType.MIXTE) {
+            log.error("La question ID {} de type {} ne peut pas être notée manuellement de cette façon.", question.getId(), question.getType());
+            throw new InvalidOperationException("Seules les questions conventionnelles ou mixtes peuvent être notées manuellement.");
+        }
+        // Valider le score : doit être positif et ne pas dépasser les points max de la question
+        if (score < 0 || score > question.getPoints()) {
+            log.error("Score manuel {} invalide pour la question ID {} (points max: {}).", score, question.getId(), question.getPoints());
+            throw new InvalidOperationException("Le score manuel doit être compris entre 0 et " + question.getPoints() + " points.");
+        }
+
+        reponse.setScoreObtenu(score); // Met à jour le score avec la note du professeur
+        ReponseEtudiant updatedReponse = reponseEtudiantRepository.save(reponse);
+        log.info("Score de la réponse ID {} mis à jour manuellement à {}.", reponseId, score);
+        return updatedReponse;
+
+    }
+
+
+    /**
+     * Méthode utilitaire pour valider et adapter les champs de réponse.
+     * @param reponseEtudiant L'objet ReponseEtudiant en cours de traitement.
+     * @param question La question associée.
+     * @throws InvalidOperationException si la réponse est invalide pour le type de question.
+     * @throws ResourceNotFoundException si une option sélectionnée n'est pas trouvée.
+     */
+    private void validateAndAdaptReponse(ReponseEtudiant reponseEtudiant, Question question) {
+        if (question.getType() == QuestionType.CHOIX_MULTIPLE) {
+            if (reponseEtudiant.getReponseTextuelle() != null && !reponseEtudiant.getReponseTextuelle().isEmpty()) {
+                throw new InvalidOperationException("Une question à choix multiples ne doit pas avoir de réponse textuelle.");
+            }
+            if (reponseEtudiant.getOptionsSelectionnees() == null || reponseEtudiant.getOptionsSelectionnees().isEmpty()) {
+                // Dépend si tu veux forcer au moins une sélection
+                throw new InvalidOperationException("Une question à choix multiples nécessite la sélection d'au moins une option.");
+            }
+            // Valider que les options sélectionnées existent et appartiennent à la question QCM
+            if (!(question instanceof QuestionChoixMultiple)) {
+                throw new InvalidOperationException("Erreur de type: La question est déclarée CHOIX_MULTIPLE mais n'est pas une instance de QuestionChoixMultiple.");
+            }
+            QuestionChoixMultiple qcmQuestion = (QuestionChoixMultiple) question;
+            Set<Long> validOptionIds = qcmQuestion.getOptions().stream()
+                    .map(Option::getId)
+                    .collect(Collectors.toSet());
+
+            for (Option selectedOption : reponseEtudiant.getOptionsSelectionnees()) {
+                if (selectedOption.getId() == null || !validOptionIds.contains(selectedOption.getId())) {
+                    throw new InvalidOperationException("Option sélectionnée avec l'ID " + selectedOption.getId() + " est invalide ou n'appartient pas à cette question.");
+                }
+                // Ré-attache l'option managée pour s'assurer qu'elle est dans le contexte de persistance
+                // Nécessaire si les options viennent d'un DTO sans être managées
+                optionRepository.findById(selectedOption.getId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Option avec l'ID " + selectedOption.getId() + " non trouvée."));
+            }
+
+        } else if (question.getType() == QuestionType.CONVENTIONNELLE) {
+            if (reponseEtudiant.getOptionsSelectionnees() != null && !reponseEtudiant.getOptionsSelectionnees().isEmpty()) {
+                throw new InvalidOperationException("Une question conventionnelle ne doit pas avoir d'options sélectionnées.");
+            }
+            if (reponseEtudiant.getReponseTextuelle() == null || reponseEtudiant.getReponseTextuelle().trim().isEmpty()) {
+                // Tu pourrais vouloir exiger une réponse non vide ici
+                log.warn("Réponse textuelle vide pour la question conventionnelle ID: {}", question.getId());
+                // throw new InvalidOperationException("Une question conventionnelle nécessite une réponse textuelle non vide.");
+            }
+        } else if (question.getType() == QuestionType.MIXTE) {
+            if (!(question instanceof QuestionMixte)) {
+                throw new InvalidOperationException("Erreur de type: La question est déclarée MIXTE mais n'est pas une instance de QuestionMixte.");
+            }
+            QuestionMixte mixteQuestion = (QuestionMixte) question;
+
+            // Pour les questions mixtes, les deux types de réponse sont possibles
+            if ((reponseEtudiant.getReponseTextuelle() == null || reponseEtudiant.getReponseTextuelle().trim().isEmpty()) &&
+                    (reponseEtudiant.getOptionsSelectionnees() == null || reponseEtudiant.getOptionsSelectionnees().isEmpty())) {
+                throw new InvalidOperationException("Une question mixte nécessite une réponse textuelle et/ou des options sélectionnées.");
+            }
+
+            if (reponseEtudiant.getOptionsSelectionnees() != null && !reponseEtudiant.getOptionsSelectionnees().isEmpty()) {
+                // Valider les options pour la partie QCM de la question mixte
+                Set<Long> validMixteOptionIds = mixteQuestion.getOptionsPartieChoixMultiple().stream()
+                        .map(Option::getId)
+                        .collect(Collectors.toSet());
+                for (Option selectedOption : reponseEtudiant.getOptionsSelectionnees()) {
+                    if (selectedOption.getId() == null || !validMixteOptionIds.contains(selectedOption.getId())) {
+                        throw new InvalidOperationException("Option sélectionnée avec l'ID " + selectedOption.getId() + " est invalide ou n'appartient pas à la partie QCM de cette question mixte.");
+                    }
+                    optionRepository.findById(selectedOption.getId())
+                            .orElseThrow(() -> new ResourceNotFoundException("Option avec l'ID " + selectedOption.getId() + " non trouvée."));
+                }
+            }
+            // La partie textuelle est optionnelle mais encouragée.
+            if (reponseEtudiant.getReponseTextuelle() == null || reponseEtudiant.getReponseTextuelle().trim().isEmpty()) {
+                log.warn("Partie textuelle vide pour la question MIXTE ID: {}", question.getId());
+            }
+
+        } else {
+            throw new InvalidOperationException("Type de question inconnu ou non supporté pour la validation de réponse: " + question.getType());
+        }
+    }
 }

@@ -15,7 +15,7 @@ public class Option {
     @Column(nullable = false)
     private String libellé;
 
-    private boolean estCorrecte = false;
+    private boolean isCorrect = false;
 
     @ManyToOne
     @JoinColumn(name = "question_id")

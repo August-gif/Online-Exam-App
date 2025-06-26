@@ -34,6 +34,10 @@ public abstract class Question {
     private String attachmentUrl; // URL du fichier annexé (PDF, image, etc.)
     // Sera null si aucune annexe n'est présente
 
+    // Nouvelle propriété pour identifier la série de la question
+    @Column(nullable = true)
+    private String serieExamenTag; // Ex: "A", "B", "C", ou "Serie_1", "Serie_2"
+
 }
 
 

@@ -7,14 +7,18 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
-@Repository
+@Repository // Indique que c'est un composant de persistance
 public interface ReponseEtudiantRepository extends JpaRepository<ReponseEtudiant,Long> {
-    // Pour trouver les réponses d'un étudiant à un examen spécifique.
-    Optional<List<ReponseEtudiant> >findByEtudiantIdAndExamenId(Long etudiantId, Long examenId);
+    // Récupère toutes les réponses soumises par un étudiant spécifique
+    List<ReponseEtudiant> findByStudentId(Long studentId);
 
-    // Pour trouver toutes les réponses soumises pour un examen.
-    List<ReponseEtudiant> findByExamenId(Long examenId);
+    // Récupère toutes les réponses soumises pour une question spécifique
+    List<ReponseEtudiant> findByQuestionId(Long questionId);
 
-    // Pour trouver toutes les réponses soumises par un étudiant.
-    List<ReponseEtudiant> findByEtudiantId(Long etudiantId);
+    // Récupère toutes les réponses d'un étudiant pour toutes les questions d'un examen donné
+    List<ReponseEtudiant> findByStudentIdAndQuestion_ExamenId(Long studentId, Long examenId);
+
+    // Tu pourrais ajouter d'autres méthodes de recherche si nécessaire
+    // Par exemple, trouver une réponse spécifique d'un étudiant à une question donnée :
+    // Optional<ReponseEtudiant> findByStudentIdAndQuestionId(Long studentId, Long questionId);
 }

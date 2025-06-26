@@ -1,77 +1,76 @@
 package com.BrainTech.Online_exam_App_server.service;
 
 import com.BrainTech.Online_exam_App_server.model.ReponseEtudiant;
-import com.BrainTech.Online_exam_App_server.model.ReponseQuestionEtudiant;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface ReponseEtudiantService {
     /**
-     * Soumet la réponse complète d'un étudiant pour un examen.
-     * Cette méthode valide si l'examen est ouvert, empêche les soumissions multiples
-     * et calcule un score initial basé sur les réponses automatiques.
-     *
+     * Enregistre la réponse d'un étudiant à une question.
+     * La logique interne gérera les différents types de questions.
+     * @param reponseEtudiant L'objet ReponseEtudiant à sauvegarder.
+     * @return La ReponseEtudiant persistante.
+     */
+    ReponseEtudiant saveReponse(ReponseEtudiant reponseEtudiant);
+
+    /**
+     * Récupère une réponse d'étudiant par son ID.
+     * @param id L'ID de la réponse.
+     * @return Un Optional contenant la ReponseEtudiant si trouvée, vide sinon.
+     */
+    Optional<ReponseEtudiant> getReponseById(Long id);
+
+    /**
+     * Récupère toutes les réponses pour un étudiant donné.
      * @param studentId L'ID de l'étudiant.
-     * @param examId L'ID de l'examen concerné.
-     * @param reponsesAuxQuestions La liste des réponses individuelles à chaque question de l'examen.
-     * @return L'objet ReponseEtudiant persistant après la soumission.
-     */
-    ReponseEtudiant soumettreReponseExamen(Long studentId, Long examId, List<ReponseQuestionEtudiant> reponsesAuxQuestions);
-
-    /**
-     * Récupère une soumission d'examen spécifique par son ID.
-     *
-     * @param id L'ID de la ReponseEtudiant.
-     * @return Un Optional contenant la ReponseEtudiant si trouvée.
-     */
-    Optional<ReponseEtudiant> getReponseEtudiantById(Long id);
-
-    /**
-     * Récupère toutes les soumissions d'examens existantes dans le système.
-     *
-     * @return Une liste de toutes les ReponseEtudiant.
-     */
-    List<ReponseEtudiant> getAllReponsesEtudiant();
-
-    /**
-     * Récupère toutes les soumissions d'examens effectuées par un étudiant spécifique.
-     *
-     * @param studentId L'ID de l'étudiant.
-     * @return Une liste des ReponseEtudiant de cet étudiant.
+     * @return Une liste de ReponseEtudiant.
      */
     List<ReponseEtudiant> getReponsesByStudentId(Long studentId);
 
     /**
-     * Récupère toutes les soumissions d'examens pour un examen donné.
-     *
-     * @param examId L'ID de l'examen.
-     * @return Une liste des ReponseEtudiant pour cet examen.
+     * Récupère toutes les réponses pour une question donnée.
+     * @param questionId L'ID de la question.
+     * @return Une liste de ReponseEtudiant.
      */
-    List<ReponseEtudiant> getReponsesByExamId(Long examId);
+    List<ReponseEtudiant> getReponsesByQuestionId(Long questionId);
 
     /**
-     * Récupère la soumission d'un étudiant pour un examen spécifique.
-     * Utile pour vérifier si un étudiant a déjà soumis un examen particulier.
-     *
+     * Récupère toutes les réponses d'un étudiant pour un examen donné.
      * @param studentId L'ID de l'étudiant.
-     * @param examId    L'ID de l'examen.
-     * @return Un Optional contenant la ReponseEtudiant si trouvée.
+     * @param examenId L'ID de l'examen.
+     * @return Une liste de ReponseEtudiant.
      */
-    Optional<List<ReponseEtudiant>> getReponseByStudentAndExam(Long studentId, Long examId);
+    List<ReponseEtudiant> getReponsesByStudentAndExamen(Long studentId, Long examenId);
 
     /**
-     * Met à jour une soumission d'examen existante.
-     * Cela peut inclure la mise à jour du score total après correction manuelle.
-     *
-     * @param id L'ID de la ReponseEtudiant à mettre à jour.
-     * @param updatedReponseEtudiant L'objet ReponseEtudiant avec les données modifiées.
+     * Met à jour une réponse existante.
+     * @param id L'ID de la réponse à mettre à jour.
+     * @param updatedReponse L'objet ReponseEtudiant avec les informations mises à jour.
      * @return La ReponseEtudiant mise à jour.
      */
-    ReponseEtudiant updateReponseEtudiant(Long id, ReponseEtudiant updatedReponseEtudiant);
+    ReponseEtudiant updateReponse(Long id, ReponseEtudiant updatedReponse);
 
-    // Note : La suppression physique de ReponseEtudiant n'est pas recommandée
-    // pour des raisons d'audit et d'intégrité des données, comme discuté précédemment.
-    // Si une "suppression" est nécessaire, il est préférable d'implémenter un "soft delete"
-    // ou un changement de statut (par exemple, "invalide", "archivée").
+    /**
+     * Supprime une réponse par son ID.
+     * @param id L'ID de la réponse à supprimer.
+     */
+    void deleteReponse(Long id);
+
+    /**
+     * Calcule et enregistre le score pour une réponse spécifique (pour une correction manuelle ou automatique).
+     * @param reponseId L'ID de la réponse à corriger.
+     * @return La ReponseEtudiant avec le score mis à jour.
+     */
+    ReponseEtudiant corrigerReponse(Long reponseId);
+
+    /**
+     * Permet à un professeur de noter manuellement une réponse à une question conventionnelle ou mixte.
+     * @param reponseId L'ID de la réponse à noter.
+     * @param score Le score attribué par le professeur.
+     * @return La ReponseEtudiant mise à jour avec le score manuel.
+     * @throws ResourceNotFoundException si la réponse n'est pas trouvée.
+     * @throws InvalidOperationException si le score est invalide ou si la question n'est pas de type conventionnel/mixte.
+     */
+    ReponseEtudiant noterManuellementReponse(Long reponseId, Double score);
 }
