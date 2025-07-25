@@ -1,4 +1,5 @@
  Online Exam App Server
+ # status du projet : en developpement
 
 Vue d'Ensemble du Projet
 Ce projet est la partie backend (API RESTful) d'une application de gestion d'examens en ligne. Développé avec Spring Boot, il fournit toutes les fonctionnalités nécessaires pour créer, gérer et administrer des examens, ainsi que pour enregistrer les participations et les résultats des étudiants. L'application est conçue pour être robuste, sécurisée et flexible, supportant des fonctionnalités avancées comme les séries de questions (variantes d'examen) attribuées spécifiquement à chaque étudiant.
